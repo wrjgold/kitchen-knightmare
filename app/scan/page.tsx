@@ -432,7 +432,7 @@ export default function ScanPage() {
         <p className="eyebrow">Receipt Scanner</p>
         <h1>Upload receipt and validate parsed food items.</h1>
         <p>
-          OCR extraction auto-parses into editable food items. Review, modify, and import only what
+          Scan your grocery receipt to update your inventory. Review, modify, and import only what
           you want in your pantry.
         </p>
         <Link href="/" className="ghostButton">
@@ -443,7 +443,7 @@ export default function ScanPage() {
       <section className="panel">
         <div className="rowButtons">
           <label htmlFor="receipt-upload" className="primaryButton uploadButton">
-            Upload image
+            Upload receipt
           </label>
           <button
             type="button"
@@ -519,7 +519,7 @@ export default function ScanPage() {
             onClick={extractOcrText}
             disabled={isExtractingOcr}
           >
-            {isExtractingOcr ? 'Extracting OCR...' : 'Extract OCR + auto-parse'}
+            {isExtractingOcr ? 'Scanning...' : 'Scan receipt'}
           </button>
           <button
             type="button"
