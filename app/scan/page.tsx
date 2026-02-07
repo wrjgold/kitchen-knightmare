@@ -93,10 +93,6 @@ export default function ScanPage() {
 
       cameraStreamRef.current = stream;
       setIsCameraOpen(true);
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
-      }
     } catch {
       setError('Could not access camera. Check browser permission and device camera settings.');
       fallbackCameraInputRef.current?.click();
@@ -165,6 +161,17 @@ export default function ScanPage() {
       stopCamera(false);
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCameraOpen || !videoRef.current || !cameraStreamRef.current) {
+      return;
+    }
+
+    videoRef.current.srcObject = cameraStreamRef.current;
+    void videoRef.current.play().catch(() => {
+      setError('Camera opened, but preview could not start. Try again.');
+    });
+  }, [isCameraOpen]);
 
   useEffect(() => {
     const cached = window.localStorage.getItem(PARSED_RECEIPT_STORAGE_KEY);
@@ -478,7 +485,7 @@ export default function ScanPage() {
               <button type="button" className="primaryButton" onClick={() => void captureFromCamera()}>
                 Capture photo
               </button>
-              <button type="button" className="ghostButton" onClick={stopCamera}>
+              <button type="button" className="ghostButton" onClick={() => stopCamera()}>
                 Cancel camera
               </button>
             </div>
