@@ -1,18 +1,15 @@
 # Kitchen Knightmare
 
-No-auth, mobile-first pantry app to reduce food waste by tracking ingredient expiration and recommending recipes that prioritize items expiring soon.
+Pantry app to reduce food waste by tracking ingredient expiration and recommending recipes that prioritize items expiring soon.
 
 ## What is implemented
 
 - Pantry inventory CRUD (manual add, edit quantity/expiration override, remove)
-- Receipt OCR extraction from uploaded image via OpenAI
-- Receipt parsing pipeline (raw OCR text -> filtered line items -> canonical ingredient names)
+- Receipt OCR extraction from uploaded image
+- Receipt parsing pipeline
 - Shelf-life based expiration estimation using canonical ingredient mapping
 - Expiration urgency ranking
-- Recipe recommendation endpoint that returns strict JSON (3-5 recipes)
-- OpenAI integration (optional fallback for recipes when key is missing)
-- Browser notifications for items nearing expiration (when permission granted)
-- Offline pantry caching via `localStorage`
+- Recipe recommendation (3-5 recipes)
 
 ## Run locally
 
@@ -46,8 +43,3 @@ Notes:
 - `/api/receipts/ocr` extract OCR text from receipt image (OpenAI)
 - `/api/receipts/parse` parse receipt raw text into canonical pantry items
 - `/api/recipes` generate structured recipe suggestions
-
-## Build checks run
-
-- `npm run lint` passed
-- `npm run build` passed
