@@ -94,6 +94,7 @@ export function createInventoryItem(input: {
   unit: string;
   purchaseDate?: string;
   expirationDateOverride?: string;
+  shelfLifeDaysOverride?: number;
   source: 'manual' | 'receipt';
 }): InventoryItem {
   const now = new Date().toISOString();
@@ -102,6 +103,7 @@ export function createInventoryItem(input: {
   const computedExpirationDate = expirationDateForItem({
     canonicalName,
     purchaseDate,
+    shelfLifeDaysOverride: input.shelfLifeDaysOverride,
   });
 
   return {

@@ -50,11 +50,22 @@ function validateRecipes(raw: unknown): RecipeSuggestion[] {
 }
 
 export async function POST(request: Request) {
+  const requestId = crypto.randomUUID().slice(0, 8);
   try {
     const body = (await request.json()) as RecipeRequest;
     const pantry = body.pantry ?? [];
+    console.info('[api/recipes] request', {
+      requestId,
+      pantryCount: Array.isArray(pantry) ? pantry.length : 0,
+      hasPreferences: Boolean(body.preferences?.trim()),
+    });
 
     if (!Array.isArray(pantry) || pantry.length === 0) {
+      console.warn('[api/recipes] response', {
+        requestId,
+        status: 400,
+        error: 'Pantry inventory is required.',
+      });
       return NextResponse.json({ error: 'Pantry inventory is required.' }, { status: 400 });
     }
 
@@ -69,6 +80,13 @@ export async function POST(request: Request) {
         rankedIngredients: ranked,
         source: 'fallback',
       };
+      console.warn('[api/recipes] response', {
+        requestId,
+        status: 200,
+        source: 'fallback',
+        reason: 'missing OPENAI_API_KEY',
+        recipes: fallback.length,
+      });
       return NextResponse.json(response);
     }
 
@@ -83,6 +101,12 @@ export async function POST(request: Request) {
       'Return JSON only. No markdown fences, no commentary.',
     ].join('\n');
 
+    console.info('[api/recipes] outbound', {
+      requestId,
+      target: 'openai.chat.completions',
+      model,
+      rankedCount: ranked.length,
+    });
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -151,9 +175,22 @@ export async function POST(request: Request) {
         },
       }),
     });
+    console.info('[api/recipes] inbound', {
+      requestId,
+      source: 'openai.chat.completions',
+      status: response.status,
+      ok: response.ok,
+    });
 
     if (!response.ok) {
       const fallback = fallbackRecipes(pantry);
+      console.warn('[api/recipes] response', {
+        requestId,
+        status: 200,
+        source: 'fallback',
+        reason: `openai status ${response.status}`,
+        recipes: fallback.length,
+      });
       return NextResponse.json({
         recipes: fallback,
         rankedIngredients: ranked,
@@ -179,6 +216,13 @@ export async function POST(request: Request) {
 
     if (recipes.length === 0) {
       const fallback = fallbackRecipes(pantry);
+      console.warn('[api/recipes] response', {
+        requestId,
+        status: 200,
+        source: 'fallback',
+        reason: 'invalid recipe JSON',
+        recipes: fallback.length,
+      });
       return NextResponse.json({
         recipes: fallback,
         rankedIngredients: ranked,
@@ -192,9 +236,23 @@ export async function POST(request: Request) {
       rankedIngredients: ranked,
       source: 'openai',
     };
+    console.info('[api/recipes] response', {
+      requestId,
+      status: 200,
+      source: 'openai',
+      recipes: recipes.length,
+    });
 
     return NextResponse.json(recipeResponse);
   } catch (error) {
+    console.error('[api/recipes] response', {
+      requestId,
+      status: 500,
+      error:
+        error instanceof Error
+          ? error.message
+          : 'Could not generate recipes at this time. Please try again later.',
+    });
     return NextResponse.json(
       {
         error:

@@ -21,6 +21,7 @@ export type ParsedReceiptItem = {
   quantity: number;
   unit: string;
   confidence: number;
+  purchaseDate?: string;
 };
 
 export type RankedIngredient = {

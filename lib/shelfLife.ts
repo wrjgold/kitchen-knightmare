@@ -122,14 +122,19 @@ export function expirationDateForItem(params: {
   canonicalName: string;
   purchaseDate: string;
   overrideExpirationDate?: string;
+  shelfLifeDaysOverride?: number;
 }): string {
-  const { canonicalName, purchaseDate, overrideExpirationDate } = params;
+  const { canonicalName, purchaseDate, overrideExpirationDate, shelfLifeDaysOverride } = params;
   if (overrideExpirationDate) {
     return new Date(overrideExpirationDate).toISOString();
   }
 
   const expiration = new Date(purchaseDate);
-  expiration.setDate(expiration.getDate() + getShelfLifeDays(canonicalName));
+  const shelfLifeDays =
+    typeof shelfLifeDaysOverride === 'number' && Number.isFinite(shelfLifeDaysOverride)
+      ? shelfLifeDaysOverride
+      : getShelfLifeDays(canonicalName);
+  expiration.setDate(expiration.getDate() + shelfLifeDays);
   return expiration.toISOString();
 }
 

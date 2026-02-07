@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { NOTIFIED_STORAGE_KEY } from '@/lib/constants';
 import { createInventoryItem, loadPantryFromStorage, savePantryToStorage } from '@/lib/pantry';
-import { daysUntil } from '@/lib/shelfLife';
+import { canonicalizeIngredient, daysUntil } from '@/lib/shelfLife';
 import type { InventoryItem, RankedIngredient, RecipeSuggestion } from '@/lib/types';
 
 function formatDate(value: string): string {
@@ -27,6 +27,18 @@ type RecipeApiPayload = {
   error?: string;
 };
 
+type ShelfLifeApiPayload = {
+  shelfLifeByCanonical?: Record<string, number>;
+  provider?: 'openai' | 'fallback';
+  warning?: string;
+  debug?: {
+    openaiRequestAttempted: boolean;
+    openaiResponseOk: boolean;
+    openaiMatchedItems: number;
+  };
+  error?: string;
+};
+
 export default function HomePage() {
   const [ingredients, setIngredients] = useState<InventoryItem[]>([]);
   const [hasHydratedPantry, setHasHydratedPantry] = useState(false);
@@ -41,6 +53,7 @@ export default function HomePage() {
   const [rankedIngredients, setRankedIngredients] = useState<RankedIngredient[]>([]);
   const [recipeSource, setRecipeSource] = useState<'openai' | 'fallback' | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [isAddingIngredient, setIsAddingIngredient] = useState(false);
   const [preferences, setPreferences] = useState('');
   const [error, setError] = useState<string | null>(null);
 
@@ -111,7 +124,7 @@ export default function HomePage() {
     }
   }, [expiringSoon]);
 
-  function addIngredient(event: FormEvent<HTMLFormElement>) {
+  async function addIngredient(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     if (!name.trim() || !quantity.trim()) {
@@ -125,20 +138,65 @@ export default function HomePage() {
       return;
     }
 
-    const newItem = createInventoryItem({
-      name: name.trim(),
-      quantity: parsedQuantity,
-      unit: unit.trim() || 'item',
-      source: 'manual',
-      expirationDateOverride: expirationDate ? new Date(expirationDate).toISOString() : undefined,
-    });
+    try {
+      setIsAddingIngredient(true);
+      const ingredientName = name.trim();
+      const expirationDateOverride = expirationDate ? new Date(expirationDate).toISOString() : undefined;
+      const { canonicalName } = canonicalizeIngredient(ingredientName);
 
-    setIngredients((prev) => [newItem, ...prev]);
-    setName('');
-    setQuantity('');
-    setUnit('');
-    setExpirationDate('');
-    setError(null);
+      let shelfLifeDaysOverride: number | undefined;
+      if (!expirationDateOverride) {
+        console.info('[client] request', {
+          endpoint: '/api/shelf-life',
+          item: ingredientName,
+          canonicalName,
+        });
+        const shelfLifeResponse = await fetch('/api/shelf-life', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            items: [{ name: ingredientName, canonicalName }],
+          }),
+        });
+        console.info('[client] response', {
+          endpoint: '/api/shelf-life',
+          status: shelfLifeResponse.status,
+          ok: shelfLifeResponse.ok,
+        });
+
+        const shelfLifePayload = (await shelfLifeResponse.json()) as ShelfLifeApiPayload;
+        console.info('[client] shelf-life payload', {
+          provider: shelfLifePayload.provider,
+          warning: shelfLifePayload.warning,
+          debug: shelfLifePayload.debug,
+        });
+        if (!shelfLifeResponse.ok) {
+          throw new Error(shelfLifePayload.error ?? 'Could not estimate shelf life.');
+        }
+
+        shelfLifeDaysOverride = shelfLifePayload.shelfLifeByCanonical?.[canonicalName];
+      }
+
+      const newItem = createInventoryItem({
+        name: ingredientName,
+        quantity: parsedQuantity,
+        unit: unit.trim() || 'item',
+        source: 'manual',
+        expirationDateOverride,
+        shelfLifeDaysOverride,
+      });
+
+      setIngredients((prev) => [newItem, ...prev]);
+      setName('');
+      setQuantity('');
+      setUnit('');
+      setExpirationDate('');
+      setError(null);
+    } catch (addError) {
+      setError(addError instanceof Error ? addError.message : 'Could not add ingredient.');
+    } finally {
+      setIsAddingIngredient(false);
+    }
   }
 
   function removeIngredient(id: string) {
@@ -192,10 +250,20 @@ export default function HomePage() {
     setError(null);
 
     try {
+      console.info('[client] request', {
+        endpoint: '/api/recipes',
+        pantryCount: ingredients.length,
+        hasPreferences: Boolean(preferences.trim()),
+      });
       const response = await fetch('/api/recipes', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ pantry: ingredients, preferences }),
+      });
+      console.info('[client] response', {
+        endpoint: '/api/recipes',
+        status: response.status,
+        ok: response.ok,
       });
 
       const payload = (await response.json()) as RecipeApiPayload;
@@ -221,26 +289,10 @@ export default function HomePage() {
     }
   }
 
-  function requestBrowserNotifications() {
-    if (typeof window === 'undefined' || !('Notification' in window)) {
-      setError('Browser notifications are not supported on this device.');
-      return;
-    }
-
-    void Notification.requestPermission().then((permission) => {
-      if (permission !== 'granted') {
-        setError('Notification permission was not granted.');
-      } else {
-        setError(null);
-      }
-    });
-  }
-
   return (
     <main className="shell">
       <section className="hero">
-        <p className="eyebrow">Kitchen Knightmare</p>
-        <h1>Pantry tracker for expiring ingredients.</h1>
+        <h1 className="eyebrow">Kitchen Knightmare</h1>
         <p>
           Manage inventory, import receipt items, and generate recipes that prioritize what expires
           first.
@@ -249,9 +301,6 @@ export default function HomePage() {
           <Link href="/scan" className="ghostButton">
             Receipt scanner
           </Link>
-          <button type="button" className="ghostButton" onClick={requestBrowserNotifications}>
-            Enable alerts
-          </button>
         </div>
       </section>
 
@@ -289,8 +338,8 @@ export default function HomePage() {
                 onChange={(event) => setExpirationDate(event.target.value)}
               />
             </label>
-            <button type="submit" className="primaryButton">
-              Add to pantry
+            <button type="submit" className="primaryButton" disabled={isAddingIngredient}>
+              {isAddingIngredient ? 'Adding...' : 'Add to pantry'}
             </button>
           </form>
         </article>
