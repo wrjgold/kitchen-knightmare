@@ -20,21 +20,6 @@ npm run dev
 
 Open `http://localhost:3000`.
 
-## Environment
-
-Copy `.env.example` to `.env.local`.
-
-```bash
-OPENAI_API_KEY=your_key_here
-# Optional for recipes
-OPENAI_MODEL=gpt-4o-mini
-# Optional for OCR (defaults to OPENAI_MODEL, then gpt-4o-mini)
-OPENAI_OCR_MODEL=gpt-4o-mini
-```
-
-Notes:
-- If `OPENAI_API_KEY` is not set, `/api/recipes` falls back to deterministic templates.
-- OCR endpoint requires `OPENAI_API_KEY`.
 
 ## Main routes
 
